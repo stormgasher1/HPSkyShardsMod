@@ -1,0 +1,28 @@
+# gradle
+.gradle/
+build/
+out/
+classes/
+bin/
+
+# claude code
+.claude/
+
+# eclipse
+*.launch
+
+# idea
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# vscode
+.vscode/
+*.log
+
+# fabric
+run/
+
+# vs
+.vs/

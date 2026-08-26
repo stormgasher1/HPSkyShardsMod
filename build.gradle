@@ -1,0 +1,79 @@
+plugins {
+    id 'net.fabricmc.fabric-loom' version "${loom_version}"
+    id 'com.gradleup.shadow' version '9.6.1'
+    id 'maven-publish'
+}
+
+version = project.mod_version
+group = project.maven_group
+
+repositories {
+    maven { name = 'Fabric'; url = 'https://maven.fabricmc.net/' }
+    // maven.terraformersmc.com / maven.shedaniel.me returned persistent 502s at time of
+    // writing, so ModMenu is pulled from Modrinth's maven mirror instead.
+    maven {
+        name = 'Modrinth'
+        url = 'https://api.modrinth.com/maven'
+        content { includeGroup 'maven.modrinth' }
+    }
+    // MoulConfig (settings screen library) is only published here, not on Modrinth/Maven Central.
+    maven { name = 'NotEnoughUpdates'; url = 'https://maven.notenoughupdates.org/releases/' }
+}
+
+configurations {
+    // modImplementation doesn't feed the compile classpath in this no-mappings setup, so this
+    // extends implementation instead, like every other dependency here. MoulConfig gets shaded +
+    // relocated into our own jar (see shadowJar below) rather than depended on as a separate mod.
+    shadowModImpl
+    implementation.extendsFrom shadowModImpl
+}
+
+dependencies {
+    minecraft "com.mojang:minecraft:${project.minecraft_version}"
+    // No mappings() line: Minecraft 26.1+ ships unobfuscated, so Loom does not remap.
+
+    implementation "net.fabricmc:fabric-loader:${project.loader_version}"
+    implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
+
+    implementation "maven.modrinth:modmenu:${project.modmenu_version}"
+    // Provides kotlin-stdlib for MoulConfig's Kotlin-compiled classes.
+    implementation "maven.modrinth:fabric-language-kotlin:${project.fabric_language_kotlin_version}"
+
+    shadowModImpl "org.notenoughupdates.moulconfig:modern-${project.minecraft_version}:${project.moulconfig_version}"
+}
+
+java {
+    withSourcesJar()
+    sourceCompatibility = JavaVersion.VERSION_25
+    targetCompatibility = JavaVersion.VERSION_25
+}
+
+processResources {
+    inputs.property 'version', project.version
+    filesMatching('fabric.mod.json') {
+        expand version: project.version
+    }
+}
+
+loom {
+    accessWidenerPath = file('src/main/resources/skyshardhelper.accesswidener')
+}
+
+// No mappings() call means Loom registers no remapJar task, so shadowJar (not jar) needs to be
+// the thing "build" produces as skyshardhelper-<version>.jar, since that's the one with
+// MoulConfig merged + relocated in.
+tasks.named('shadowJar') {
+    from sourceSets.main.output
+    configurations = [project.configurations.shadowModImpl]
+    archiveClassifier.set('')
+    relocate 'io.github.notenoughupdates.moulconfig', 'com.skyshardhelper.libs.moulconfig'
+    mergeServiceFiles()
+}
+
+tasks.named('jar') {
+    archiveClassifier.set('slim')
+}
+
+tasks.named('assemble') {
+    dependsOn tasks.named('shadowJar')
+}
